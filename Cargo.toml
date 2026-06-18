@@ -1,0 +1,46 @@
+[package]
+name = "zk-alloc"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.79"
+authors = ["woblr <woblorwon@gmail.com>"]
+description = "High-performance Linux allocator for ZK provers — keeps large buffers resident across proof rounds to eliminate page-fault overhead."
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/woblr/zk-alloc"
+homepage = "https://github.com/woblr/zk-alloc"
+documentation = "https://docs.rs/zk-alloc"
+keywords = ["allocator", "zkp", "cryptography", "performance", "memory"]
+categories = ["memory-management", "cryptography"]
+exclude = [".github/", "benches/", "tests/"]
+
+[features]
+default = []
+# Pick which allocator the benchmark binary installs as #[global_allocator], so
+# the same benches measure each one head-to-head. Enable exactly one (if several
+# are on, zk-alloc wins, so `--all-features` still builds).
+bench-global = []                              # zk-alloc
+bench-jemalloc = ["dep:tikv-jemallocator"]     # jemalloc
+bench-mimalloc = ["dep:mimalloc"]              # mimalloc
+
+[dependencies]
+libc = "0.2"
+# Comparison allocators, only pulled in by the matching bench feature.
+tikv-jemallocator = { version = "0.6", optional = true }
+mimalloc = { version = "0.1", optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "zk_patterns"
+harness = false
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[profile.bench]
+lto = "thin"
+codegen-units = 1
