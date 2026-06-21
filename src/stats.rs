@@ -6,7 +6,6 @@
 
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering::Relaxed};
 
-#[derive(Default)]
 pub(crate) struct Counters {
     pub hits: AtomicU64,
     pub misses: AtomicU64,

@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::config::{HUGE_PAGE, PAGE};
 use crate::error::MapFailed;
 use crate::sys;
+use crate::sys::round_up;
 
 /// A fixed-capacity bump allocator backed by a single mapping.
 ///
@@ -139,11 +140,6 @@ impl Drop for Arena {
 // The cursor is atomic and `base`/`capacity` are immutable after construction.
 unsafe impl Send for Arena {}
 unsafe impl Sync for Arena {}
-
-#[inline]
-fn round_up(value: usize, to: usize) -> usize {
-    (value + to - 1) & !(to - 1)
-}
 
 #[cfg(test)]
 mod tests {
