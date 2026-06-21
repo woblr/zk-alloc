@@ -95,7 +95,15 @@ impl Shard {
             while !node.is_null() {
                 // SAFETY: cached region we own; read link/size before advising.
                 let (next, total) = unsafe { ((*node).next, (*node).total) };
-                sys::advise_free(node as *mut u8, total);
+                // Skip the first page so the FreeNode metadata is never reclaimed
+                // by the kernel. If the kernel zero-fills that page, the next
+                // pop() would read a null `next` pointer and silently truncate the
+                // free list, leaking every region below the reclaimed node.
+                let data = (node as *mut u8).wrapping_add(crate::config::PAGE);
+                let data_len = total.saturating_sub(crate::config::PAGE);
+                if data_len > 0 {
+                    sys::advise_free(data, data_len);
+                }
                 bytes += total;
                 node = next;
             }
@@ -108,7 +116,10 @@ impl Shard {
         let mut cache = lock(&self.0);
         let mut freed = 0usize;
         for head in cache.heads.iter_mut() {
-            let mut node = *head;
+            // Null the slot before walking the list so that a panic inside
+            // `unmap` leaves the shard in a consistent empty state rather than
+            // holding a dangling pointer to already-freed memory.
+            let mut node = ptr::replace(head, ptr::null_mut());
             while !node.is_null() {
                 // SAFETY: cached region; read its size and link before unmapping.
                 let (next, total) = unsafe { ((*node).next, (*node).total) };
@@ -117,7 +128,6 @@ impl Shard {
                 freed += total;
                 node = next;
             }
-            *head = ptr::null_mut();
         }
         freed
     }
@@ -228,9 +238,11 @@ pub fn release_all() -> usize {
     for shard in SHARDS.iter().take(n) {
         freed += shard.drain();
     }
-    STATS
-        .cached_bytes
-        .fetch_sub(freed.min(STATS.cached_bytes.load(Relaxed)), Relaxed);
+    // Store zero directly: all shards are now empty so the true value is 0.
+    // A fetch_sub(load()) pair would be a TOCTOU race — another thread could
+    // change cached_bytes between the load and the subtract, causing underflow
+    // to usize::MAX and permanently corrupting the ceiling check in dealloc.
+    STATS.cached_bytes.store(0, Relaxed);
     freed
 }
 

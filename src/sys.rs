@@ -23,15 +23,16 @@ pub fn map(len: usize, align: usize) -> *mut u8 {
     debug_assert!(len % PAGE == 0);
 
     if align <= PAGE {
-        let p = raw_map(len);
-        if !p.is_null() && align >= HUGE_PAGE {
-            advise_hugepage(p, len);
-        }
-        return p;
+        return raw_map(len);
     }
 
     // Over-map by one alignment so an aligned start is guaranteed to fit.
-    let over = len + align;
+    // Use checked arithmetic: if len + align would wrap, the request is
+    // pathologically large and we treat it as OOM.
+    let over = match len.checked_add(align) {
+        Some(v) => v,
+        None => return std::ptr::null_mut(),
+    };
     let base = raw_map(over);
     if base.is_null() {
         return std::ptr::null_mut();
@@ -44,6 +45,7 @@ pub fn map(len: usize, align: usize) -> *mut u8 {
         unsafe { libc::munmap(base as *mut libc::c_void, head) };
     }
     let tail = over - head - len;
+    // SAFETY: aligned + len is within the over-mapped region (head + len + tail == over).
     if tail > 0 {
         unsafe { libc::munmap((aligned + len) as *mut libc::c_void, tail) };
     }
@@ -135,6 +137,12 @@ pub fn unlock(ptr: *mut u8, len: usize) -> bool {
 #[inline]
 pub fn protect_none(ptr: *mut u8, len: usize) -> bool {
     unsafe { libc::mprotect(ptr as *mut libc::c_void, len, libc::PROT_NONE) == 0 }
+}
+
+/// Round `value` up to the nearest multiple of `to` (which must be a power of two).
+#[inline]
+pub(crate) fn round_up(value: usize, to: usize) -> usize {
+    (value + to - 1) & !(to - 1)
 }
 
 /// Overwrite `len` bytes at `ptr` with zero in a way the compiler may not elide.

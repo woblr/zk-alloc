@@ -34,8 +34,8 @@ round after round.
   for witness data.
 - **Observability and tuning**: `stats()` (cache hit rate), `cached_bytes()`,
   `release_cache()` (return address space), `soften_cache()` (`MADV_FREE` warm
-  release), and the `ZK_ALLOC_CACHE_BYTES` environment override (default: half
-  of physical RAM).
+  release), and the `ZK_ALLOC_CACHE_BYTES` environment override (default:
+  `min(RAM/8, 1 GiB)`).
 
 ### Changed
 - **Linux only.** The allocator now depends on `mmap`/`madvise` semantics with

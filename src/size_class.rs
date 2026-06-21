@@ -9,7 +9,9 @@
 use crate::config::{HUGE_PAGE, LARGE_THRESHOLD, PAGE};
 
 /// log2(LARGE_THRESHOLD); the grid starts at this power.
-const B_MIN: u32 = 16;
+/// Derived from the constant so a change to LARGE_THRESHOLD can never
+/// silently produce wrong index calculations.
+const B_MIN: u32 = LARGE_THRESHOLD.trailing_zeros();
 
 /// The size class for a request: its index (for cache bucketing) and the actual
 /// number of bytes a region of that class spans.

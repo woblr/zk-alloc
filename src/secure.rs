@@ -18,6 +18,7 @@ use std::slice;
 use crate::config::PAGE;
 use crate::error::MapFailed;
 use crate::sys;
+use crate::sys::round_up;
 
 /// A page-aligned, swap-locked, guard-fenced byte buffer that wipes itself when
 /// dropped.
@@ -55,8 +56,10 @@ impl SecretBuf {
         // SAFETY: `base` spans `total` bytes; the guard ranges are within it.
         let data = unsafe { base.add(PAGE) };
         let rear = unsafe { data.add(data_pages) };
-        sys::protect_none(base, PAGE);
-        sys::protect_none(rear, PAGE);
+        let front_ok = sys::protect_none(base, PAGE);
+        let rear_ok = sys::protect_none(rear, PAGE);
+        debug_assert!(front_ok, "failed to install leading guard page");
+        debug_assert!(rear_ok, "failed to install trailing guard page");
 
         let locked = sys::lock(data, data_pages);
 
@@ -130,11 +133,6 @@ impl Drop for SecretBuf {
 // and `&mut` gates all mutation.
 unsafe impl Send for SecretBuf {}
 unsafe impl Sync for SecretBuf {}
-
-#[inline]
-fn round_up(value: usize, to: usize) -> usize {
-    (value + to - 1) & !(to - 1)
-}
 
 #[cfg(test)]
 mod tests {
